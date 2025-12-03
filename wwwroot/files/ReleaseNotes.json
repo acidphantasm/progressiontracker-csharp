@@ -1,0 +1,13 @@
+﻿[
+  {
+    "Version": "1.0.0",
+    "ReleaseDate": "December 1, 2025",
+    "IsLatest": true,
+    "NewFeatures": [
+      "Initial Release"
+    ],
+    "Changes": [],
+    "BugFixes": [],
+    "KnownIssues": []
+  }
+]

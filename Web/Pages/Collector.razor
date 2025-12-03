@@ -1,0 +1,265 @@
+﻿@page "/progressiontracker/collector"
+@layout MainLayout
+
+@using _progressionTracker.Web.Shared
+@using SPTarkov.Server.Core.Utils
+@using _progressionTracker
+
+@inject FileUtil FileUtil;
+@inject JsonUtil JsonUtil;
+@inject ProgressionTracker ProgressionTracker;
+
+<MudMainContent Style="height: 100vh">
+    <MudContainer>
+        
+        <MudPaper Class="pa-3" Style="background-color: #2A0D12;">
+            <MudStack AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.h2">Collector</MudText>
+                <MudText Typo="Typo.caption">@($"Quests Last Updated: {FormatShort(ProgressionTracker.LastUpdateCheckCollectorQuests)} ago")</MudText>
+                <MudText Typo="Typo.caption">@($"Items Last Updated: {FormatShort(ProgressionTracker.LastUpdateCheck)} ago")</MudText>
+            </MudStack>
+        </MudPaper>
+
+        @foreach (var (currentProfileId, currentProfileName) in ProgressionTracker.ProfilesIdToName.Where(kvp => string.IsNullOrWhiteSpace(localSearchText) || kvp.Value.Contains(localSearchText, StringComparison.OrdinalIgnoreCase)))
+        {
+            var currentQuestCompleted = GetCompletedQuestCount(currentProfileId);
+            var currentQuestInProgress = GetInProgressQuestCount(currentProfileId);
+            var bufferQuestValue = currentQuestInProgress + currentQuestCompleted;
+            var maxQuestValue = GetCollectorQuestMaxCount();
+            var remainingQuests = maxQuestValue - currentQuestCompleted;
+
+            var currentItemsObtained = GetCompletedItemCount(currentProfileId);
+            var maxItemValue = GetCollectorItemMaxCount();
+            var remainingItems = maxItemValue - currentItemsObtained;
+
+            <MudPaper Class="ma-4" Elevation="3">
+                <MudPaper Class="pa-3" Style="background-color: #2A0D12;">
+                    <MudText Typo="Typo.h6" Align="Align.Left">@currentProfileName</MudText>
+                </MudPaper>
+
+                <MudStack Spacing="2" Class="pa-3">
+                    <div class="d-flex align-items-center">
+                        <MudTooltip Color="Color.Primary" Placement="Placement.Left" Arrow="true">
+                            <ChildContent>
+                                <MudText Class="me-4" Style="width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                    Quest Status
+                                </MudText>
+                            </ChildContent>
+                            <TooltipContent>
+                                <MudStack Spacing="1">
+                                    <MudText Typo="Typo.caption">Quests In Progress: @currentQuestInProgress</MudText>
+                                    <MudText Typo="Typo.caption">Quests Completed: @currentQuestCompleted</MudText>
+                                    <MudText Typo="Typo.caption">Quests Remaining: @remainingQuests</MudText>
+                                </MudStack>
+                            </TooltipContent>
+                        </MudTooltip>
+
+                        <div class="flex-grow-1 me-2" style="min-width: 0;">
+                            <MudProgressLinear Value="@currentQuestCompleted"
+                                               Buffer="true"
+                                               BufferValue="@bufferQuestValue"
+                                               Min="0"
+                                               Max="@maxQuestValue"
+                                               Color="Color.Secondary"
+                                               Size="Size.Large"
+                                               Class="static-progress"
+                                               Style="height: 24px;"/>
+                        </div>
+
+                        <MudText Typo="Typo.subtitle1" Color="Color.Secondary" Class="progress-text" style="white-space: nowrap; min-width: 75px">
+                            <b>@currentQuestCompleted / @maxQuestValue</b>
+                        </MudText>
+                    </div>
+
+                    <div class="d-flex align-items-center">
+                        <MudTooltip Color="Color.Primary" Placement="Placement.Left" Arrow="true">
+                            <ChildContent>
+                                <MudText Class="me-4" Style="width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                    Item Status
+                                </MudText>
+                            </ChildContent>
+                            <TooltipContent>
+                                <MudStack Spacing="1">
+                                    <MudText Typo="Typo.caption">Items Obtained: @currentItemsObtained</MudText>
+                                    <MudText Typo="Typo.caption">Items Remaining: @remainingItems</MudText>
+                                </MudStack>
+                            </TooltipContent>
+                        </MudTooltip>
+
+                        <div class="flex-grow-1 me-2" style="min-width: 0;">
+                            <MudProgressLinear Value="@currentItemsObtained"
+                                               Min="0"
+                                               Max="@maxItemValue"
+                                               Color="Color.Secondary"
+                                               Size="Size.Large"
+                                               Class="static-progress"
+                                               Style="height: 24px;"/>
+                        </div>
+                        <MudText Typo="Typo.subtitle1" Color="Color.Secondary" Class="progress-text" style="white-space: nowrap; min-width: 75px"><b>@currentItemsObtained / @maxItemValue</b></MudText>
+                    </div>
+
+                    <MudGrid Justify="Justify.FlexStart" GutterSize="2">
+                        @foreach (var (itemId, obtained) in ProgressionTracker.ProfileCollectorItemsCollected[currentProfileId])
+                        {
+                            if (!ProgressionTracker.RequiredCollectorItems.TryGetValue(itemId, out var itemName)) itemName = "??";
+                            <MudItem xs="3">
+                                <MudPaper Class="d-flex flex-column align-center justify-center p-1" Elevation="0">
+                                    <img src="@GetItemImageUrl(itemId)"
+                                         alt="@itemName"
+                                         title="@itemName"
+                                         style="
+                                             width: 48px;
+                                             height: 48px;
+                                             object-fit: contain;
+                                             border: @(obtained ? "2px solid green" : "2px solid gray");
+                                             opacity: @(obtained ? "1" : "0.4");
+                                             border-radius: 4px;"/>
+                                    <MudText Typo="Typo.caption" Align="Align.Center" Class="mt-1">@itemName</MudText>
+                                </MudPaper>
+                            </MudItem>
+                        }
+                    </MudGrid>
+
+                </MudStack>
+            </MudPaper>
+        }
+        <div style="height: 100px;"></div>
+    </MudContainer>
+</MudMainContent>
+
+<style>
+    .static-progress .mud-progress-linear-bar-buffer {
+        background-image: none;
+        transition: none !important;
+        animation: none !important;
+    }
+    .static-progress .mud-progress-linear-bar {
+        background-color: #907B6B25;
+        background-image: none;
+        transition: none !important;
+        animation: none !important;
+    }
+    .static-progress .mud-progress-linear-bar:first-child {
+        background-size: 10px 10px;
+        background-image: none !important;
+        background-position: 0 -23px;
+    }
+</style>
+
+@code {
+    private System.Timers.Timer? _refreshTimer;
+    private string localSearchText = "";
+    protected override void OnInitialized()
+    {
+        _refreshTimer = new System.Timers.Timer(30000);
+        _refreshTimer.Elapsed += (sender, args) =>
+        {
+            InvokeAsync(StateHasChanged);
+        };
+        _refreshTimer.AutoReset = true;
+        _refreshTimer.Start();
+        
+        localSearchText = MainLayout.ProfileSearch;
+        ProgressionTracker.OnProgressionUpdated += RefreshUi;
+        MainLayout.OnSearchChanged += HandleSearchChanged;
+    }
+    
+    private void HandleSearchChanged(string newSearch)
+    {
+        localSearchText = newSearch;
+        RefreshUi();
+    }
+    
+    private void RefreshUi()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+    
+    private double GetCollectorQuestMaxCount()
+    {
+        return ProgressionTracker.RequiredCollectorQuests.Count;
+    }
+
+    private double GetCompletedQuestCount(string profileId)
+    {
+        if (!ProgressionTracker.ProfileCollectorQuestsCompletedStatus.TryGetValue(profileId, out var questsDictionary))
+        {
+            return 0;
+        }
+
+        var completedCount = 0;
+        foreach (var quest in questsDictionary)
+        {
+            if (quest.Value)
+            {
+                completedCount++;
+            }
+        }
+
+        return completedCount;
+    }
+
+    private double GetInProgressQuestCount(string profileId)
+    {
+        if (!ProgressionTracker.ProfileCollectorQuestsInProgressStatus.TryGetValue(profileId, out var questsDictionary))
+        {
+            return 0;
+        }
+
+        var completedCount = 0;
+        foreach (var quest in questsDictionary)
+        {
+            if (quest.Value)
+            {
+                completedCount++;
+            }
+        }
+
+        return completedCount;
+    }
+    
+    private double GetCollectorItemMaxCount()
+    {
+        return ProgressionTracker.RequiredCollectorItems.Count;
+    }
+
+    private double GetCompletedItemCount(string profileId)
+    {
+        if (!ProgressionTracker.ProfileCollectorItemsCollected.TryGetValue(profileId, out var itemDictionary))
+        {
+            return 0;
+        }
+
+        var completedCount = 0;
+        foreach (var item in itemDictionary)
+        {
+            if (item.Value)
+            {
+                completedCount++;
+            }
+        }
+
+        return completedCount;
+    }
+    
+    private string GetItemImageUrl(string itemId)
+    {
+        return $"/acidphantasm-progressiontracker/images/items/{itemId}.webp";
+    }
+    
+    private static string FormatShort(DateTime timestamp)
+    {
+        var span = DateTime.UtcNow - timestamp;
+
+        if (span.TotalSeconds < 60)
+            return $"{(int)span.TotalSeconds}s";
+
+        if (span.TotalMinutes < 60)
+            return $"{(int)span.TotalMinutes}m {(int)span.Seconds}s";
+
+        if (span.TotalHours < 24)
+            return $"{(int)span.TotalHours}h {(int)span.Minutes}m";
+
+        return $"{(int)span.TotalDays}d {(int)span.Hours}h";
+    }
+}

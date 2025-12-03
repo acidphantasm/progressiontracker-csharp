@@ -1,0 +1,418 @@
+﻿@using _progressionTracker.Globals
+@using _progressionTracker.Models.Enums
+@using _progressionTracker.Web.Core
+@using Color = MudBlazor.Color
+@inherits LayoutComponentBase
+
+@inject NavigationManager NavManager
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject IJSRuntime Js
+
+<HeadContent>
+    <link href="@Assets["_content/MudBlazor/MudBlazor.min.css"]" rel="stylesheet" />
+    <meta name="robots" content="noindex, nofollow">
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&amp;family=Roboto:ital,wght@0,100..900;1,100..900&amp;display=swap" rel="stylesheet">
+    <script src="@Assets["_content/MudBlazor/MudBlazor.min.js"]"></script>
+</HeadContent>
+
+<MudThemeProvider Theme="@ThemeAdjustments" IsDarkMode/>
+<MudPopoverProvider/>
+<MudSnackbarProvider />
+<MudDialogProvider />
+
+<div class="no-highlight">
+    <MudLayout>
+        <MudAppBar Dense Elevation="1">
+            <MudButton Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.MenuOpen" Color="Color.Inherit" OnClick="@((e) => DrawerToggle())">Menu</MudButton>
+            <MudSpacer/>
+                <MudTextField @bind-Value="ProfileSearch" Immediate="true" Placeholder="Find specific profile..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Class="mb-3"/>
+            <MudSpacer/>
+            <MudButton Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Refresh" Color="Color.Inherit" OnClick="@((e) => RefreshData())" Disabled="_isReloading">Reload Config</MudButton>
+            <MudButton Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Save" Color="Color.Inherit" OnClick="@((e) => SaveData())" Disabled="_isSaving">Save Config</MudButton>
+        </MudAppBar>
+        <MudDrawer @bind-Open="_drawerOpen" Elevation="2" ClipMode="DrawerClipMode.Always" Variant="@DrawerVariant.Temporary" Breakpoint="Breakpoint.None">
+            <MudDrawerHeader>
+                <MudText Typo="Typo.h5" Class="mt-1">SETTINGS</MudText>
+            </MudDrawerHeader>
+            <NavMenu/>
+        </MudDrawer>
+        <MudMainContent Class="pt-3">
+            @if (_appDisableAnimations)
+            {
+                <div class="no-animation-content">
+                    @Body
+                </div>
+            }
+            else
+            {
+                <div class="content">
+                    @Body
+                </div>
+            }
+        </MudMainContent>
+        <MudAppBar Dense Elevation="1" Bottom>
+            <MudCheckBox @bind-Value="_appDisableAnimations" Label="Disable Animations"/>
+            <MudCheckBox @bind-Value="_appAllowUpdateChecks" Label="Enable Update Checks"/>
+            <MudSpacer/>
+            @if (pendingChanges.Count > 0)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="ShowPendingChanges">@pendingChanges.Count.ToString() Unsaved changes</MudButton>
+            }
+            @if (pendingChanges.Count == 0)
+            {
+                <MudButton Variant="Variant.Outlined" Color="Color.Inherit">@pendingChanges.Count.ToString() Unsaved Changes</MudButton>
+            }
+        </MudAppBar>
+    </MudLayout>
+</div>
+
+<style>
+    .custom-blur-background {
+        backdrop-filter: blur(7px);
+    }
+    #blazor-error-ui {
+        background: lightyellow;
+        bottom: 0;
+        box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+        display: none;
+        left: 0;
+        padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+        position: fixed;
+        width: 100%;
+        z-index: 1000;
+        color: red;
+        margin-left: 3rem;
+    }
+
+    #blazor-error-ui .dismiss {
+        cursor: pointer;
+        position: absolute;
+        right: 0.75rem;
+        top: 0.5rem;
+    }
+
+    .no-highlight {
+        -webkit-user-drag: none;
+        -webkit-user-select: none;
+        user-select: none;
+    }
+
+    :scope .content {
+        overflow: auto;
+        position: relative;
+        animation-name: transition;
+        animation-duration: 1.5s;
+        animation-delay: 0s;
+        animation-fill-mode: forwards;
+    }
+
+    .content::before {
+        content: "";
+        position: fixed;
+        background-position: 0px 0px;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: -1;
+        display: block;
+        width: 100%;
+        height: 100%;
+        background-image: url('/acidphantasm-progressiontracker/images/background.jpg');
+        background-size: cover;
+        -webkit-filter: blur(5px);
+        -moz-filter: blur(5px);
+        filter: blur(5px);
+        animation-name: transitionBG;
+        animation-duration: 3.5s;
+        animation-delay: 1s;
+        animation-fill-mode: forwards;
+    }
+
+    :scope .no-animation-content {
+        overflow: auto;
+        position: relative;
+        user-select: none;
+        -webkit-user-drag: none;
+        -webkit-user-select: none;
+    }
+
+    .no-animation-content::before {
+        content: "";
+        position: fixed;
+        background-position: 0px 0px;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: -1;
+        display: block;
+        background-image: url('/acidphantasm-progressiontracker/images/background.jpg');
+        background-size: cover;
+        width: 100%;
+        height: 100%;
+        -webkit-filter: blur(5px);
+        -moz-filter: blur(5px);
+        filter: blur(5px);
+    }
+</style>
+
+@code {
+    private static MainLayout? _app;
+    
+    bool _drawerOpen = false;
+    
+    static bool _unsavedChanges = false;
+    public static List<string> pendingChanges = new();
+    private static bool _isSaving = false;
+    private static bool _isReloading = false;
+    public static bool AlreadyCheckedForUpdate = false;
+    public static bool UpdateAvailable = false;
+    
+    private static string _profileSearch = "";
+    public static string ProfileSearch
+    {
+        get => _profileSearch;
+        set
+        {
+            if (_profileSearch != value)
+            {
+                _profileSearch = value;
+                OnSearchChanged?.Invoke(value);
+            }
+        }
+    }
+    public static event Action<string>? OnSearchChanged;
+    
+    public static bool _appDisableAnimations
+    {
+        get => ModConfig.Config.ConfigAppSettings.DisableAnimations;
+        set
+        {
+            ModConfig.Config.ConfigAppSettings.DisableAnimations = value;
+            Utils.UpdateView(value, ModConfig.OriginalConfig.ConfigAppSettings.DisableAnimations);
+        }
+    }
+    public static bool _appAllowUpdateChecks
+    {
+        get => ModConfig.Config.ConfigAppSettings.AllowUpdateChecks;
+        set
+        {
+            ModConfig.Config.ConfigAppSettings.AllowUpdateChecks = value;
+            Utils.UpdateView(value, ModConfig.OriginalConfig.ConfigAppSettings.AllowUpdateChecks);
+        }
+    }
+
+    MudTheme ThemeAdjustments = new MudTheme()
+    {
+        PaletteDark = new PaletteDark()
+        {
+            Primary = "#2A0D12",
+            Secondary = "#907B6B",
+            Background = "#160C10",
+            Surface = "#1A1219",
+            DrawerBackground = "#160C10",
+            DrawerText = "#907B6B",
+            DrawerIcon = "#907B6B",
+            AppbarBackground = "#2A0D12",
+            AppbarText = "#907B6B",
+            TextPrimary = "#E0D6C5",
+            TextSecondary = "#CFC1B3",
+            TextDisabled = "#7A6B60",
+            ActionDefault = "#907B6B",
+            ActionDisabled = "#7A6B60",
+            ActionDisabledBackground = "#2B2227",
+            LinesDefault = "#2B2227",
+            TableLines = "#2B2227",
+            TableStriped = "#1A1219",
+            Success = "#907B6B",
+            Info = "#CFC1B3",
+            Warning = "#D9BBA0",
+            Error = "#B0302A",
+        },
+    };
+
+    public MainLayout()
+    {
+        _app = this;
+    }
+
+    public static void EnableUnsavedChangesButton()
+    {
+        _unsavedChanges = true;
+        _app?.StateHasChanged();
+    }
+
+    public static void TriggerUIRefresh()
+    {
+        _app?.StateHasChanged();
+    }
+
+    void DrawerToggle()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+    private async Task SaveData()
+    {
+        try
+        {
+            _isSaving = true;
+            StateHasChanged();
+            
+            var result = await ModConfig.SaveConfig();
+
+            StateHasChanged();
+            switch (result)
+            {
+                case ConfigOperationResult.Success:
+                    Snackbar.Add("Config saved successfully.", Severity.Info, config => { config.ShowCloseIcon = false; });
+                    pendingChanges.Clear();
+                    _unsavedChanges = false;
+                    break;
+                case ConfigOperationResult.ActiveProcess:
+                    Snackbar.Add("Another process is already running.", Severity.Warning, config => { config.ShowCloseIcon = false; });
+                    break;
+                case ConfigOperationResult.Failure:
+                default:
+                    Snackbar.Add("Config failed to save.", Severity.Error, config => { config.ShowCloseIcon = false; });
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Unexpected error: {ex.Message}", Severity.Error, config => { config.ShowCloseIcon = false; });
+        }
+        finally
+        {
+            _isSaving = false;
+            StateHasChanged();
+        }
+    }
+    
+    private async Task RefreshData()
+    {
+        if (_unsavedChanges || pendingChanges.Count > 0)
+        {
+            var changeCount = pendingChanges.Count switch
+            {
+                > 1 => $"{pendingChanges.Count} unsaved changes",
+                1 => "1 unsaved change",
+                _ => "unsaved changes"
+            };
+
+            var parameters = new DialogParameters<RefreshWarningDialog>
+            {
+                { x => x.ChangeList, pendingChanges },
+                { x => x.ButtonText, "Reload Anyway" },
+                { x => x.Color, Color.Secondary }
+            };
+
+            var options = new DialogOptions { MaxWidth = MaxWidth.Medium, BackgroundClass = "custom-blur-background" };
+
+            var dialog = await DialogService.ShowAsync<RefreshWarningDialog>($"You have {changeCount}.", parameters, options);
+            var result = await dialog.Result;
+
+            if (result is not null && !result.Canceled)
+                await DiscardChangesAndReload();
+
+            return;
+        }
+
+        try
+        {
+            _isReloading = true;
+            StateHasChanged();
+
+            var result = await ModConfig.ReloadConfig();
+            StateHasChanged();
+
+            switch (result)
+            {
+                case ConfigOperationResult.Success:
+                    Snackbar.Add("Config reloaded successfully.", Severity.Info, cfg => cfg.ShowCloseIcon = false);
+                    _unsavedChanges = false;
+                    pendingChanges.Clear();
+                    break;
+                case ConfigOperationResult.ActiveProcess:
+                    Snackbar.Add("Another process is already running.", Severity.Warning, cfg => cfg.ShowCloseIcon = false);
+                    break;
+                case ConfigOperationResult.Failure:
+                default:
+                    Snackbar.Add("Config failed to reload.", Severity.Error, cfg => cfg.ShowCloseIcon = false);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Unexpected error: {ex.Message}", Severity.Error, cfg => cfg.ShowCloseIcon = false);
+        }
+        finally
+        {
+            _isReloading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ShowPendingChanges()
+    {
+        var changeCount = pendingChanges.Count switch
+        {
+            > 1 => $"{pendingChanges.Count} changes",
+            1 => "1 change",
+            _ => "changes"
+        };
+        var parameters = new DialogParameters<RefreshWarningDialog>
+            {
+                { x => x.ChangeList, pendingChanges },
+                { x => x.ButtonText, "OK" },
+                { x => x.showCancel, false },
+                { x => x.Color, Color.Default }
+            };
+
+        var options = new DialogOptions() { MaxWidth = MaxWidth.Medium, BackgroundClass = "custom-blur-background" };
+
+        await DialogService.ShowAsync<RefreshWarningDialog>($"You have {changeCount}.", parameters, options);
+    }
+
+    private async Task DiscardChangesAndReload()
+    {
+        var changeCount = pendingChanges.Count switch
+        {
+            > 1 => $"{pendingChanges.Count} changes",
+            1 => "1 change",
+            _ => "changes"
+        };
+
+        try
+        {
+            _isReloading = true;
+            StateHasChanged();
+
+            var result = await ModConfig.ReloadConfig();
+
+            switch (result)
+            {
+                case ConfigOperationResult.Success:
+                    Snackbar.Add($"{changeCount} discarded and config reloaded.", Severity.Warning, cfg => cfg.ShowCloseIcon = false);
+                    pendingChanges.Clear();
+                    _unsavedChanges = false;
+                    break;
+                case ConfigOperationResult.ActiveProcess:
+                    Snackbar.Add("Another process is already running.", Severity.Warning, cfg => cfg.ShowCloseIcon = false);
+                    break;
+                case ConfigOperationResult.Failure:
+                default:
+                    Snackbar.Add("Config failed to reload.", Severity.Error, cfg => cfg.ShowCloseIcon = false);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Unexpected error: {ex.Message}", Severity.Error, cfg => cfg.ShowCloseIcon = false);
+        }
+        finally
+        {
+            _isReloading = false;
+            StateHasChanged();
+        }
+    }
+}

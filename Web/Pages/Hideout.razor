@@ -1,0 +1,253 @@
+﻿@page "/progressiontracker/hideout"
+@layout MainLayout
+
+@using System.Reflection
+@using _progressionTracker.Web.Shared
+@using SPTarkov.Server.Core.Utils
+@using _progressionTracker
+@using SPTarkov.Server.Core.Models.Common
+@using SPTarkov.Server.Core.Models.Enums
+@using SPTarkov.Server.Core.Models.Enums.Hideout
+
+@inject ProgressionTracker ProgressionTracker;
+
+<MudMainContent Style="height: 100vh">
+    <MudContainer>
+        
+        <MudPaper Class="pa-3" Style="background-color: #2A0D12;">
+            <MudStack AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.h2">Hideout</MudText>
+                <MudText Typo="Typo.caption">@($"Last Updated: {FormatShort(ProgressionTracker.LastUpdateCheck)} ago")</MudText>
+            </MudStack>
+        </MudPaper>
+
+        @foreach (var (currentProfileId, currentProfileName) in ProgressionTracker.ProfilesIdToName.Where(kvp => string.IsNullOrWhiteSpace(localSearchText) || kvp.Value.Contains(localSearchText, StringComparison.OrdinalIgnoreCase)))
+        {
+            <MudPaper Class="ma-4" Elevation="3">
+                <MudPaper Class="pa-3" Style="background-color: #2A0D12;">
+                    <MudText Typo="Typo.h6" Align="Align.Left">@currentProfileName</MudText>
+                </MudPaper>
+
+                <MudStack Spacing="2" Class="pa-3">
+                    @foreach (var (areaTypeEnum, items) in ProgressionTracker.ProfileHideoutProgressData[currentProfileId].ItemsNeededByArea)
+                    {
+                        var areaTypeStringName = SplitPascalCase(areaTypeEnum.ToString());
+                        if (areaTypeEnum == HideoutAreas.WeaponStandSecondary) continue;
+
+                        <MudText Typo="Typo.h6" Class="mt-4 mb-2">
+                            @($"Area: {areaTypeStringName}")
+                        </MudText>
+                        <MudDivider Class="mb-2" />
+
+                        if (ProgressionTracker.ProfileHideoutProgressData[currentProfileId].AreasInConstruction.TryGetValue(areaTypeEnum, out var areaProgress))
+                        {
+                            var now = DateTime.UtcNow;
+                            var totalTimeSeconds = areaProgress.TotalConstructionTime ?? 0;
+                            var remainingSeconds = areaProgress.CompleteTime > now ? (areaProgress.CompleteTime - now).TotalSeconds : 0;
+
+                            var remainingTimeSpan = TimeSpan.FromSeconds(remainingSeconds);
+                            var hours = remainingTimeSpan.Hours;
+                            var minutes = remainingTimeSpan.Minutes;
+
+                            var percentComplete = areaProgress.Completed
+                                ? 100
+                                : (totalTimeSeconds > 0
+                                    ? 100 * (1 - remainingSeconds / totalTimeSeconds)
+                                    : 100);
+
+                            <MudProgressLinear Value="@percentComplete"
+                                               Color="@(areaProgress.Completed ? Color.Success : Color.Secondary)"
+                                               Class="mb-2"
+                                               Style="height: 24px;" />
+
+                            <MudText Typo="Typo.caption" Align="Align.Center">
+                                @(areaProgress.Completed ? "Construction Complete" : $"Construction in progress - {(hours > 0 ? $"{hours}h " : "")}{minutes}m remaining")
+                            </MudText>
+                        }
+                        else
+                        {
+                            if (ProgressionTracker.ProfileHideoutProgressData[currentProfileId].AreasNeededByArea.TryGetValue(areaTypeEnum, out var neededAreas))
+                            {
+                                <MudGrid Justify="Justify.FlexStart" GutterSize="2" Class="mb-2">
+                                    @foreach (var (requiredArea, (currentLevel, requiredLevel)) in neededAreas)
+                                    {
+                                        var meetsRequirement = currentLevel >= requiredLevel;
+
+                                        <MudItem xs="3">
+                                            <MudPaper Class="d-flex flex-column align-center justify-center p-1 mb-2" Elevation="0">
+                                                <img src="@GetBlankImage()"
+                                                     alt="@requiredArea"
+                                                     title="Area Requires Attention"
+                                                     style="
+                                                         width: 48px;
+                                                         height: 48px;
+                                                         object-fit: contain;
+                                                         border: @(meetsRequirement ? "2px solid green" : "2px solid gray");
+                                                         opacity: @(meetsRequirement ? "1" : "0.4");
+                                                         border-radius: 4px;" />
+                                                <MudText Typo="Typo.caption" Align="Align.Center" Class="mt-1">@($"{requiredArea}")</MudText>
+                                                <MudText Typo="Typo.caption" Align="Align.Center" Class="mt-1">@($"{currentLevel}/{requiredLevel}")</MudText>
+                                            </MudPaper>
+                                        </MudItem>
+                                    }
+                                </MudGrid>
+                            }
+                            
+                            @if (ProgressionTracker.ProfileHideoutProgressData[currentProfileId].TraderLoyaltyNeededByArea.TryGetValue(areaTypeEnum, out var requiredTraders))
+                            {
+                                <MudGrid Justify="Justify.FlexStart" GutterSize="2" Class="mt-2 mb-2">
+                                    @foreach (var (traderId, requiredLevelNullable) in requiredTraders)
+                                    {
+                                        var requiredLevel = requiredLevelNullable ?? 0;
+                                        var currentLevel = ProgressionTracker.ProfileTraderLoyaltyStatus.TryGetValue(currentProfileId, out var traderDict) && traderDict.TryGetValue(traderId, out var level) ? level : 0;
+
+                                        var meetsRequirement = currentLevel >= requiredLevel;
+
+                                        <MudItem xs="3">
+                                            <MudPaper Class="d-flex flex-column align-center justify-center p-1" Elevation="0">
+                                                <img src="@GetTraderImageUrl(traderId)"
+                                                     alt="@traderId"
+                                                     title="@traderId"
+                                                     style="
+                                                        width: 48px;
+                                                        height: 48px;
+                                                        object-fit: contain;
+                                                        border: @(meetsRequirement ? "2px solid green" : "2px solid gray");
+                                                        opacity: @(meetsRequirement ? "1" : "0.4");
+                                                        border-radius: 4px;" />
+                                                <MudText Typo="Typo.caption" Align="Align.Center" Class="mt-1">@GetTraderNameFromId(traderId)</MudText>
+                                                <MudText Typo="Typo.caption" Align="Align.Center" Class="mt-1">@currentLevel / @requiredLevel LL</MudText>
+                                            </MudPaper>
+                                        </MudItem>
+                                    }
+                                </MudGrid>
+                            }
+
+                            <MudGrid Justify="Justify.FlexStart" GutterSize="2" Class="mt-2">
+                                @foreach (var itemData in items)
+                                {
+                                    <MudItem xs="3">
+                                        <MudPaper Class="d-flex flex-column align-center justify-center p-1" Elevation="0">
+                                            <img src="@GetItemImageUrl(itemData.TemplateId)"
+                                                 alt="@itemData.ItemName"
+                                                 title="@itemData.ItemName"
+                                                 style="
+                                                     width: 48px;
+                                                     height: 48px;
+                                                     object-fit: contain;
+                                                     border: @(itemData.Complete ? "2px solid green" : "2px solid gray");
+                                                     opacity: @(itemData.Complete ? "1" : "0.4");
+                                                     border-radius: 4px;" />
+                                            <MudText Typo="Typo.caption" Align="Align.Center" Class="mt-1">@itemData.ItemName</MudText>
+                                            <MudText Typo="Typo.caption" Align="Align.Center" Class="mt-1">@itemData.CountOwned / @itemData.CountNeeded</MudText>
+                                        </MudPaper>
+                                    </MudItem>
+                                }
+                            </MudGrid>
+                        }
+                    }
+                </MudStack>
+            </MudPaper>
+        }
+        <div style="height: 100px;"></div>
+    </MudContainer>
+</MudMainContent>
+
+<style>
+    .static-progress .mud-progress-linear-bar-buffer {
+        background-image: none;
+        transition: none !important;
+        animation: none !important;
+    }
+    .static-progress .mud-progress-linear-bar {
+        background-color: #907B6B25;
+        background-image: none;
+        transition: none !important;
+        animation: none !important;
+    }
+    .static-progress .mud-progress-linear-bar:first-child {
+        background-size: 10px 10px;
+        background-image: none !important;
+        background-position: 0 -23px;
+    }
+</style>
+
+@code {
+    private System.Timers.Timer? _refreshTimer;
+    private string localSearchText = "";
+    protected override void OnInitialized()
+    {
+        _refreshTimer = new System.Timers.Timer(30000);
+        _refreshTimer.Elapsed += (sender, args) =>
+        {
+            InvokeAsync(StateHasChanged);
+        };
+        _refreshTimer.AutoReset = true;
+        _refreshTimer.Start();
+        
+        localSearchText = MainLayout.ProfileSearch;
+        ProgressionTracker.OnProgressionUpdated += RefreshUi;
+        MainLayout.OnSearchChanged += HandleSearchChanged;
+    }
+    
+    private void HandleSearchChanged(string newSearch)
+    {
+        localSearchText = newSearch;
+        RefreshUi();
+    }
+
+    private void RefreshUi()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+    
+    private string GetItemImageUrl(string itemId)
+    {
+        var path = Path.Combine(ProgressionTracker.ModPath, "wwwroot", "images", "items", $"{itemId}.webp");
+        return !File.Exists(path) ? "/acidphantasm-progressiontracker/images/items/blank.webp" : $"/acidphantasm-progressiontracker/images/items/{itemId}.webp";
+    }
+    
+    private string GetTraderImageUrl(string traderId)
+    {
+        var path = Path.Combine(ProgressionTracker.ModPath, "wwwroot", "images", "traders", $"{traderId}.png");
+        return !File.Exists(path) ? "/acidphantasm-progressiontracker/images/traders/blank.png" : $"/acidphantasm-progressiontracker/images/traders/{traderId}.png";
+    }
+    
+    private string GetBlankImage()
+    {
+        return $"/acidphantasm-progressiontracker/images/traders/blank.png";
+    }
+    
+    private string? GetTraderNameFromId(MongoId id)
+    {
+        var traderField = typeof(Traders).GetFields(BindingFlags.Public | BindingFlags.Static);
+
+        foreach (var traderInfo in traderField)
+        {
+            if (traderInfo.GetValue(null) is MongoId mongoId && mongoId == id)
+            {
+                return traderInfo.Name;
+            }
+        }
+
+        return null;
+    }
+    
+    private string FormatShort(DateTime timestamp)
+    {
+        var span = DateTime.UtcNow - timestamp;
+
+        if (span.TotalSeconds < 60)
+            return $"{(int)span.TotalSeconds}s";
+
+        if (span.TotalMinutes < 60)
+            return $"{(int)span.TotalMinutes}m {(int)span.Seconds}s";
+
+        return span.TotalHours < 24 ? $"{(int)span.TotalHours}h {(int)span.Minutes}m" : $"{(int)span.TotalDays}d {(int)span.Hours}h";
+    }
+    
+    private string SplitPascalCase(string text)
+    {
+        return string.IsNullOrWhiteSpace(text) ? text : System.Text.RegularExpressions.Regex.Replace(text, "(?<!^)([A-Z])", " $1");
+    }
+}
