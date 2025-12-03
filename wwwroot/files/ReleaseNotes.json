@@ -1,10 +1,12 @@
 ﻿[
   {
     "Version": "1.0.0",
-    "ReleaseDate": "December 1, 2025",
+    "ReleaseDate": "December 2, 2025",
     "IsLatest": true,
     "NewFeatures": [
-      "Initial Release"
+      "Initial Release",
+      "Tracks Collector Quest & Item progress",
+      "Tracks Hideout Construction and Requirement progress"
     ],
     "Changes": [],
     "BugFixes": [],
