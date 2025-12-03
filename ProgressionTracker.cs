@@ -93,13 +93,14 @@ public class ProgressionTracker(
     {
         var allQuests = databaseService.GetQuests();
         var collector = allQuests[CollectorID];
-        
-        foreach (var requiredCondition in collector.Conditions.AvailableForFinish)
+
+        if (collector.Conditions.AvailableForFinish is not null)
         {
-            if (requiredCondition == null) continue;
-            if (requiredCondition.ConditionType == "HandoverItem")
+            foreach (var requiredCondition in collector.Conditions.AvailableForFinish)
             {
+                if (requiredCondition.ConditionType != "HandoverItem") continue;
                 var itemId = FirstOrDefault(requiredCondition.Target);
+                if (itemId is null) continue;
                 var itemName = itemHelper.GetItemName(itemId);
 
                 /* Only use this when you need to get new images
@@ -108,15 +109,17 @@ public class ProgressionTracker(
                 RequiredCollectorItems[itemId] = itemName;
             }
         }
-        
-        foreach (var requiredQuest in collector.Conditions.AvailableForStart)
+
+        if (collector.Conditions.AvailableForStart is not null)
         {
-            if (requiredQuest == null) continue;
-            if (requiredQuest.ConditionType == "Quest")
+            foreach (var requiredQuest in collector.Conditions.AvailableForStart)
             {
+                if (requiredQuest.ConditionType != "Quest") continue;
                 var questId = FirstOrDefault(requiredQuest.Target);
-                if (!allQuests.ContainsKey(questId)) continue;
-                var questName = allQuests[questId].QuestName;
+                if (questId is null) continue;
+                if (!allQuests.TryGetValue(questId, out var quest)) continue;
+                    
+                var questName = quest.QuestName;
 
                 RequiredCollectorQuests[questId] = questName;
             }
@@ -196,28 +199,6 @@ public class ProgressionTracker(
             }
         }
     }
-    
-    public void SaveProfileHideoutProgress(string profileId)
-    {
-        if (!ProfileHideoutProgressData.TryGetValue(profileId, out var data))
-            return;
-
-        Directory.CreateDirectory(Path.Combine(Environment.CurrentDirectory, "user", "mods", "acidphantasm-progressiontracker", "temp")); 
-
-        string filePath = Path.Combine(Path.Combine(Environment.CurrentDirectory, "user", "mods", "acidphantasm-progressiontracker", "temp"), $"{profileId}-hideout.json");
-
-        var options = new JsonSerializerOptions
-        {
-            WriteIndented = true,
-        };
-
-        string json = JsonSerializer.Serialize(data, options);
-
-        File.WriteAllText(filePath, json);
-    
-        logger.Info($"Saved temp hideout data → {filePath}");
-    }
-
 
     private void UpdateRequiredHideoutItemsForProfile(string profileId)
     {
@@ -399,30 +380,5 @@ public class ProgressionTracker(
         LastUpdateCheckCollectorQuests = DateTime.UtcNow;
 
         OnProgressionUpdated?.Invoke();
-    }
-    
-    private static readonly string CacheFolder = Path.Combine(Environment.CurrentDirectory, "user", "mods", "acidphantasm-progressiontracker", "wwwroot", "images", "items");
-    private static readonly HttpClient _httpClient = new HttpClient();
-    
-    public static async Task<string> GetImageUrlAsync(string itemId)
-    {
-        string localFileName = Path.Combine(CacheFolder, $"{itemId}.webp");
-        if (!File.Exists(localFileName))
-        {
-            // Download the image
-            string url = $"https://assets.tarkov.dev/{itemId}-512.webp";
-            try
-            {
-                var bytes = await _httpClient.GetByteArrayAsync(url);
-                await File.WriteAllBytesAsync(localFileName, bytes);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-            }
-        }
-
-        // Return relative URL for Blazor
-        return $"/images/items/{itemId}.webp";
     }
 }

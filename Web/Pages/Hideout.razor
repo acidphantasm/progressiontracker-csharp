@@ -3,7 +3,6 @@
 
 @using System.Reflection
 @using _progressionTracker.Web.Shared
-@using SPTarkov.Server.Core.Utils
 @using _progressionTracker
 @using SPTarkov.Server.Core.Models.Common
 @using SPTarkov.Server.Core.Models.Enums
@@ -71,12 +70,13 @@
                                 <MudGrid Justify="Justify.FlexStart" GutterSize="2" Class="mb-2">
                                     @foreach (var (requiredArea, (currentLevel, requiredLevel)) in neededAreas)
                                     {
+                                        var requiredAreaStringName = SplitPascalCase(requiredArea.ToString());
                                         var meetsRequirement = currentLevel >= requiredLevel;
 
                                         <MudItem xs="3">
                                             <MudPaper Class="d-flex flex-column align-center justify-center p-1 mb-2" Elevation="0">
                                                 <img src="@GetBlankImage()"
-                                                     alt="@requiredArea"
+                                                     alt="@requiredAreaStringName"
                                                      title="Area Requires Attention"
                                                      style="
                                                          width: 48px;
@@ -85,7 +85,7 @@
                                                          border: @(meetsRequirement ? "2px solid green" : "2px solid gray");
                                                          opacity: @(meetsRequirement ? "1" : "0.4");
                                                          border-radius: 4px;" />
-                                                <MudText Typo="Typo.caption" Align="Align.Center" Class="mt-1">@($"{requiredArea}")</MudText>
+                                                <MudText Typo="Typo.caption" Align="Align.Center" Class="mt-1">@($"{requiredAreaStringName}")</MudText>
                                                 <MudText Typo="Typo.caption" Align="Align.Center" Class="mt-1">@($"{currentLevel}/{requiredLevel}")</MudText>
                                             </MudPaper>
                                         </MudItem>
