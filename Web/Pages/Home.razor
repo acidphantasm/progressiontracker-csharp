@@ -191,7 +191,7 @@
             httpClient.DefaultRequestHeaders.UserAgent.TryParseAdd("acidphantasm");
             httpClient.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
 
-            var release = await httpClient.GetFromJsonAsync<ReleaseInformation>("https://api.github.com/repos/acidphantasm/progressivebotsystem-csharp/releases/latest");
+            var release = await httpClient.GetFromJsonAsync<ReleaseInformation>("https://api.github.com/repos/acidphantasm/progressiontracker-csharp/releases/latest");
             if (release != null)
             {
                 Version latestVersion = new(release.Version);
