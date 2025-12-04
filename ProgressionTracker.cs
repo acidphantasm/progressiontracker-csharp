@@ -24,7 +24,7 @@ public record ModMetadata : AbstractModMetadata, IModWebMetadata
     public override string Name { get; init; } = "Progression Tracker";
     public override string Author { get; init; } = "acidphantasm";
     public override List<string>? Contributors { get; init; }
-    public override SemanticVersioning.Version Version { get; init; } = new("1.0.0");
+    public override SemanticVersioning.Version Version { get; init; } = new("1.0.1");
     public override SemanticVersioning.Range SptVersion { get; init; } = new("~4.0.0");
     public override List<string>? Incompatibilities { get; init; }
     public override Dictionary<string, SemanticVersioning.Range>? ModDependencies { get; init; }
@@ -54,6 +54,8 @@ public class ProgressionTracker(
     
     public Dictionary<string, string> RequiredCollectorQuests = new();
     public Dictionary<string, string> RequiredCollectorItems = new();
+    
+    public Dictionary<string, string> CachedHideoutItemNameMap = new();
 
     public Dictionary<string, Dictionary<string, bool>> ProfileCollectorQuestsInProgressStatus = new();
     public Dictionary<string, Dictionary<string, bool>> ProfileCollectorQuestsCompletedStatus = new();
@@ -72,6 +74,7 @@ public class ProgressionTracker(
         
         GetCollectorRequirements();
         GetProfileStatusInformation();
+        CacheHideoutItemRequirementNames();
         
         logger.Success("Progression Tracker is now live!");
         return Task.CompletedTask;
@@ -87,6 +90,29 @@ public class ProgressionTracker(
         logger.Success($"Updating Profile Data - Time since last run : {timeSinceLastRun}");
 
         return Task.FromResult(true);
+    }
+
+    
+    private void CacheHideoutItemRequirementNames()
+    {
+        var hideoutAreas = databaseService.GetHideout().Areas;
+
+        var itemTemplateIds =
+            hideoutAreas
+                .SelectMany(area => area.Stages.Values)
+                .Where(stage => stage.Requirements != null)
+                .SelectMany(stage => stage.Requirements)
+                .Where(req => req.Type == "Item")
+                .Select(req => req.TemplateId)
+                .Distinct();
+
+        foreach (var tpl in itemTemplateIds)
+        {
+            if (!CachedHideoutItemNameMap.ContainsKey(tpl))
+            {
+                CachedHideoutItemNameMap[tpl] = itemHelper.GetItemName(tpl);
+            }
+        }
     }
 
     private void GetCollectorRequirements()
@@ -146,7 +172,7 @@ public class ProgressionTracker(
             var profileId = kvp.Key;
             var profile = kvp.Value;
             var profileName = profile.CharacterData?.PmcData?.Info?.Nickname;
-            if (profileName is null) continue;
+            if (profileName is null || profileName.Contains("headless_")) continue;
             
             ProfilesIdToName[profileId] = profileName;
             
@@ -238,10 +264,13 @@ public class ProgressionTracker(
 
                         if (existingItem == null)
                         {
+                            if (!CachedHideoutItemNameMap.TryGetValue(stageRequirement.TemplateId, out var itemName))
+                                itemName = itemHelper.GetItemName(stageRequirement.TemplateId);
+                            
                             progressData.ItemsNeededByArea[area.Type].Add(new HideoutItemRequirement
                             {
                                 TemplateId = stageRequirement.TemplateId,
-                                ItemName = itemHelper.GetItemName(stageRequirement.TemplateId),
+                                ItemName = itemName,
                                 RequiresFoundInRaid = stageRequirement.IsSpawnedInSession == true,
                                 CountNeeded = stageRequirement.Count,
                                 CountOwned = 0,

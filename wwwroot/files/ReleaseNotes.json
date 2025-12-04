@@ -1,8 +1,20 @@
 ﻿[
   {
+    "Version": "1.0.1",
+    "ReleaseDate": "December 3, 2025",
+    "IsLatest": true,
+    "NewFeatures": [],
+    "Changes": [
+      "No longer tracks headless profiles",
+      "Improved compatibility with mods that changed item names to be functionally unreadable for users"
+    ],
+    "BugFixes": [],
+    "KnownIssues": []
+  },
+  {
     "Version": "1.0.0",
     "ReleaseDate": "December 2, 2025",
-    "IsLatest": true,
+    "IsLatest": false,
     "NewFeatures": [
       "Initial Release",
       "Tracks Collector Quest & Item progress",
