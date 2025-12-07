@@ -1,12 +1,27 @@
 ﻿[
   {
+    "Version": "1.0.2",
+    "ReleaseDate": "December 7, 2025",
+    "IsLatest": true,
+    "NewFeatures": [
+      "[Hideout] Collapsable display of total items required for all hideout upgrades (next level upgrades only)",
+      "[Collector] Collapsable display of in progress quests, their conditions, and status"
+    ],
+    "Changes": [
+      "[Hideout] Condensed item list",
+      "[Collector] Condensed item list"
+    ],
+    "BugFixes": [],
+    "KnownIssues": []
+  },
+  {
     "Version": "1.0.1",
     "ReleaseDate": "December 3, 2025",
-    "IsLatest": true,
+    "IsLatest": false,
     "NewFeatures": [],
     "Changes": [
-      "No longer tracks headless profiles",
-      "Improved compatibility with mods that changed item names to be functionally unreadable for users"
+      "[All] No longer tracks headless profiles",
+      "[Hideout] Improved compatibility with mods that changed item names to be functionally unreadable for users"
     ],
     "BugFixes": [],
     "KnownIssues": []

@@ -24,7 +24,7 @@ public record ModMetadata : AbstractModMetadata, IModWebMetadata
     public override string Name { get; init; } = "Progression Tracker";
     public override string Author { get; init; } = "acidphantasm";
     public override List<string>? Contributors { get; init; }
-    public override SemanticVersioning.Version Version { get; init; } = new("1.0.1");
+    public override SemanticVersioning.Version Version { get; init; } = new("1.0.2");
     public override SemanticVersioning.Range SptVersion { get; init; } = new("~4.0.0");
     public override List<string>? Incompatibilities { get; init; }
     public override Dictionary<string, SemanticVersioning.Range>? ModDependencies { get; init; }
@@ -39,32 +39,34 @@ public class ProgressionTracker(
     DatabaseService databaseService,
     ProfileHelper profileHelper,
     ItemHelper itemHelper,
-    ModHelper modHelper)
+    ModHelper modHelper,
+    LocaleService localeService)
     : IOnLoad, IOnUpdate
 {
     public string ModPath = string.Empty;
     
     public event Action? OnProgressionUpdated;
     public Dictionary<string, string> ProfilesIdToName = new();
-    
-    private readonly string CollectorID = "5c51aac186f77432ea65c552";
-    
-    private Dictionary<string, Dictionary<string, (int total, int fir)>> ProfileItemCollection = new();
-    public Dictionary<string, ProfileHideoutProgress> ProfileHideoutProgressData = new();
-    
-    public Dictionary<string, string> RequiredCollectorQuests = new();
-    public Dictionary<string, string> RequiredCollectorItems = new();
-    
-    public Dictionary<string, string> CachedHideoutItemNameMap = new();
 
-    public Dictionary<string, Dictionary<string, bool>> ProfileCollectorQuestsInProgressStatus = new();
-    public Dictionary<string, Dictionary<string, bool>> ProfileCollectorQuestsCompletedStatus = new();
-    
-    public Dictionary<string, Dictionary<string, bool>> ProfileCollectorItemsCollected = new();
-    
-    public Dictionary<string, Dictionary<string, int>> ProfileTraderLoyaltyStatus = new();
+    private const string CollectorId = "5c51aac186f77432ea65c552";
 
-    private int secondsRequiredForUpdate = 600; 
+    private readonly Dictionary<string, Dictionary<string, (int total, int fir)>> _profileItemCollection = new();
+    public readonly Dictionary<string, ProfileHideoutProgress> ProfileHideoutProgressData = new();
+    
+    public readonly Dictionary<string, string> RequiredCollectorQuests = new();
+    public readonly Dictionary<string, string> RequiredCollectorItems = new();
+    public readonly Dictionary<string, List<QuestDisplayInfo>> CollectorInProgressDisplay = new();
+    
+    private readonly Dictionary<string, string> _cachedHideoutItemNameMap = new();
+
+    public readonly Dictionary<string, Dictionary<string, bool>> ProfileCollectorQuestsInProgressStatus = new();
+    public readonly Dictionary<string, Dictionary<string, bool>> ProfileCollectorQuestsCompletedStatus = new();
+    
+    public readonly Dictionary<string, Dictionary<string, bool>> ProfileCollectorItemsCollected = new();
+    
+    public readonly Dictionary<string, Dictionary<string, int>> ProfileTraderLoyaltyStatus = new();
+
+    private readonly int _secondsRequiredForUpdate = 600; 
     public DateTime LastUpdateCheck = DateTime.UtcNow;
     public DateTime LastUpdateCheckCollectorQuests = DateTime.UtcNow;
     
@@ -75,19 +77,17 @@ public class ProgressionTracker(
         GetCollectorRequirements();
         GetProfileStatusInformation();
         CacheHideoutItemRequirementNames();
-        
-        logger.Success("Progression Tracker is now live!");
         return Task.CompletedTask;
     }
     
     public Task<bool> OnUpdate(long timeSinceLastRun)
     {
-        if (timeSinceLastRun < secondsRequiredForUpdate) return Task.FromResult(false);
+        if (timeSinceLastRun < _secondsRequiredForUpdate) return Task.FromResult(false);
         
         LastUpdateCheck = DateTime.UtcNow;
         GetProfileStatusInformation();
         OnProgressionUpdated?.Invoke();
-        logger.Success($"Updating Profile Data - Time since last run : {timeSinceLastRun}");
+        logger.Success($"[ProgressionTracker] Updating Profile Data - Time since last run : {timeSinceLastRun}");
 
         return Task.FromResult(true);
     }
@@ -108,9 +108,9 @@ public class ProgressionTracker(
 
         foreach (var tpl in itemTemplateIds)
         {
-            if (!CachedHideoutItemNameMap.ContainsKey(tpl))
+            if (!_cachedHideoutItemNameMap.ContainsKey(tpl))
             {
-                CachedHideoutItemNameMap[tpl] = itemHelper.GetItemName(tpl);
+                _cachedHideoutItemNameMap[tpl] = itemHelper.GetItemName(tpl);
             }
         }
     }
@@ -118,7 +118,7 @@ public class ProgressionTracker(
     private void GetCollectorRequirements()
     {
         var allQuests = databaseService.GetQuests();
-        var collector = allQuests[CollectorID];
+        var collector = allQuests[CollectorId];
 
         if (collector.Conditions.AvailableForFinish is not null)
         {
@@ -150,6 +150,55 @@ public class ProgressionTracker(
                 RequiredCollectorQuests[questId] = questName;
             }
         }
+    }
+    
+    private List<QuestDisplayInfo> GetActiveQuestDisplayData(string profileId)
+    {
+        var result = new List<QuestDisplayInfo>();
+
+        if (!ProfileCollectorQuestsInProgressStatus.TryGetValue(profileId, out var questsDictionary))
+            return result;
+
+        var questDb = databaseService.GetQuests();
+        var localeDb = localeService.GetLocaleDb();
+
+        foreach (var (questId, inProgress) in questsDictionary)
+        {
+            if (!inProgress || !questDb.TryGetValue(questId, out var questData))
+                continue;
+
+            var questInfo = new QuestDisplayInfo
+            {
+                QuestName = questData.QuestName ?? "Unknown Quest"
+            };
+
+            foreach (var condition in questData.Conditions.AvailableForFinish ?? [])
+            {
+                localeDb.TryGetValue(condition.Id, out var localeText);
+                localeText ??= "(Missing Condition Text)";
+
+                var questConditionDisplay = new QuestConditionDisplay()
+                {
+                    Text = localeText,
+                    Completed = false
+                };
+
+                var taskConditionCounters = profileHelper.GetProfileByPmcId(profileId)?.TaskConditionCounters;
+                if (taskConditionCounters is not null)
+                {
+                    if (taskConditionCounters.TryGetValue(condition.Id, out var taskConditions) && taskConditions.Value >= condition.Value)
+                    {
+                        questConditionDisplay.Completed = true;
+                    }
+                }
+
+                questInfo.Conditions.Add(questConditionDisplay);
+            }
+
+            result.Add(questInfo);
+        }
+
+        return result;
     }
     
     private string? FirstOrDefault(ListOrT<string>? input)
@@ -205,12 +254,14 @@ public class ProgressionTracker(
                 }
             }
             
+            CollectorInProgressDisplay[profileId] = GetActiveQuestDisplayData(profileId);
+            
             // hideout
             UpdateRequiredHideoutItemsForProfile(profileId);
 
             // profile item handling data
             if (!ProfileCollectorItemsCollected.ContainsKey(profileId)) ProfileCollectorItemsCollected[profileId] = new Dictionary<string, bool>();
-            if (!ProfileItemCollection.ContainsKey(profileId)) ProfileItemCollection[profileId] = new Dictionary<string, (int total, int fir)>();
+            if (!_profileItemCollection.ContainsKey(profileId)) _profileItemCollection[profileId] = new Dictionary<string, (int total, int fir)>();
             UpdateInventoryData(profileId);
             
             // traders
@@ -264,7 +315,7 @@ public class ProgressionTracker(
 
                         if (existingItem == null)
                         {
-                            if (!CachedHideoutItemNameMap.TryGetValue(stageRequirement.TemplateId, out var itemName))
+                            if (!_cachedHideoutItemNameMap.TryGetValue(stageRequirement.TemplateId, out var itemName))
                                 itemName = itemHelper.GetItemName(stageRequirement.TemplateId);
                             
                             progressData.ItemsNeededByArea[area.Type].Add(new HideoutItemRequirement
@@ -335,11 +386,11 @@ public class ProgressionTracker(
         var profileInventoryData = profileHelper.GetFullProfile(profileId).CharacterData?.PmcData?.Inventory?.Items;
         if (profileInventoryData is null) return;
         
-        ProfileItemCollection[profileId].Clear();
+        _profileItemCollection[profileId].Clear();
         foreach (var item in profileInventoryData)
         {
             var tpl = item.Template;
-            if (!ProfileItemCollection[profileId].ContainsKey(tpl)) ProfileItemCollection[profileId][tpl] = (0, 0);
+            if (!_profileItemCollection[profileId].ContainsKey(tpl)) _profileItemCollection[profileId][tpl] = (0, 0);
 
             int countToAdd;
 
@@ -348,12 +399,12 @@ public class ProgressionTracker(
 
             var isFoundInRaid = item.Upd?.SpawnedInSession == true;
 
-            var current = ProfileItemCollection[profileId][tpl];
+            var current = _profileItemCollection[profileId][tpl];
             current.total += countToAdd;
 
             if (isFoundInRaid) current.fir += countToAdd;
 
-            ProfileItemCollection[profileId][tpl] = current;
+            _profileItemCollection[profileId][tpl] = current;
 
             if (RequiredCollectorItems.ContainsKey(tpl) && isFoundInRaid)
             {
@@ -377,7 +428,7 @@ public class ProgressionTracker(
         if (!ProfileHideoutProgressData.TryGetValue(profileId, out var progress))
             return;
 
-        if (!ProfileItemCollection.TryGetValue(profileId, out var ownedItems))
+        if (!_profileItemCollection.TryGetValue(profileId, out var ownedItems))
             return;
 
         foreach (var areaItems in progress.ItemsNeededByArea.Values)

@@ -26,6 +26,44 @@
                 <MudPaper Class="pa-3" Style="background-color: #2A0D12;">
                     <MudText Typo="Typo.h6" Align="Align.Left">@currentProfileName</MudText>
                 </MudPaper>
+                
+                <MudExpansionPanels Elevation="0">
+                    <MudExpansionPanel Text="Total Required Items (Click to Expand)" Expanded="false">
+        
+                        <MudGrid Justify="Justify.FlexStart" Class="mb-4 mt-2">
+                            @foreach (var (templateId, itemData) in GetCombinedItemRequirements(currentProfileId))
+                            {
+                                var complete = itemData.CountOwned >= itemData.CountNeeded;
+
+                                <MudItem xs="1">
+                                    <MudPaper Class="d-flex flex-column align-center justify-center p-1" Elevation="0">
+                                        <img src="@GetItemImageUrl(templateId)"
+                                             alt="@itemData.ItemName"
+                                             title="@itemData.ItemName"
+                                             style="
+                                                width: 48px;
+                                                height: 48px;
+                                                object-fit: contain;
+                                                border: @(complete ? "2px solid green" : "2px solid gray");
+                                                opacity: @(complete ? "1" : "0.4");
+                                                border-radius: 4px;" />
+
+                                        <MudText Typo="Typo.caption" Align="Align.Center" Class="mt-1">
+                                            @itemData.ItemName
+                                        </MudText>
+
+                                        <MudText Typo="Typo.caption" Align="Align.Center" Class="mt-1">
+                                            @itemData.CountOwned / @itemData.CountNeeded
+                                        </MudText>
+                                    </MudPaper>
+                                </MudItem>
+                            }
+                        </MudGrid>
+
+                    </MudExpansionPanel>
+                </MudExpansionPanels>
+                
+                <MudDivider Class="border-2 mb-2" />
 
                 <MudStack Spacing="2" Class="pa-3">
                     @foreach (var (areaTypeEnum, items) in ProgressionTracker.ProfileHideoutProgressData[currentProfileId].ItemsNeededByArea)
@@ -67,13 +105,13 @@
                         {
                             if (ProgressionTracker.ProfileHideoutProgressData[currentProfileId].AreasNeededByArea.TryGetValue(areaTypeEnum, out var neededAreas))
                             {
-                                <MudGrid Justify="Justify.FlexStart" GutterSize="2" Class="mb-2">
+                                <MudGrid Justify="Justify.FlexStart" Class="mb-2">
                                     @foreach (var (requiredArea, (currentLevel, requiredLevel)) in neededAreas)
                                     {
                                         var requiredAreaStringName = SplitPascalCase(requiredArea.ToString());
                                         var meetsRequirement = currentLevel >= requiredLevel;
 
-                                        <MudItem xs="3">
+                                        <MudItem xs="1">
                                             <MudPaper Class="d-flex flex-column align-center justify-center p-1 mb-2" Elevation="0">
                                                 <img src="@GetBlankImage()"
                                                      alt="@requiredAreaStringName"
@@ -95,7 +133,7 @@
                             
                             @if (ProgressionTracker.ProfileHideoutProgressData[currentProfileId].TraderLoyaltyNeededByArea.TryGetValue(areaTypeEnum, out var requiredTraders))
                             {
-                                <MudGrid Justify="Justify.FlexStart" GutterSize="2" Class="mt-2 mb-2">
+                                <MudGrid Justify="Justify.FlexStart" Class="mt-2 mb-2">
                                     @foreach (var (traderId, requiredLevelNullable) in requiredTraders)
                                     {
                                         var requiredLevel = requiredLevelNullable ?? 0;
@@ -103,7 +141,7 @@
 
                                         var meetsRequirement = currentLevel >= requiredLevel;
 
-                                        <MudItem xs="3">
+                                        <MudItem xs="1">
                                             <MudPaper Class="d-flex flex-column align-center justify-center p-1" Elevation="0">
                                                 <img src="@GetTraderImageUrl(traderId)"
                                                      alt="@traderId"
@@ -123,10 +161,10 @@
                                 </MudGrid>
                             }
 
-                            <MudGrid Justify="Justify.FlexStart" GutterSize="2" Class="mt-2">
+                            <MudGrid Justify="Justify.FlexStart" Class="mt-2">
                                 @foreach (var itemData in items)
                                 {
-                                    <MudItem xs="3">
+                                    <MudItem xs="1">
                                         <MudPaper Class="d-flex flex-column align-center justify-center p-1" Elevation="0">
                                             <img src="@GetItemImageUrl(itemData.TemplateId)"
                                                  alt="@itemData.ItemName"
@@ -244,6 +282,40 @@
             return $"{(int)span.TotalMinutes}m {(int)span.Seconds}s";
 
         return span.TotalHours < 24 ? $"{(int)span.TotalHours}h {(int)span.Minutes}m" : $"{(int)span.TotalDays}d {(int)span.Hours}h";
+    }
+    
+    private Dictionary<string, (string ItemName, int CountOwned, int? CountNeeded)> GetCombinedItemRequirements(string profileId)
+    {
+        var result = new Dictionary<string, (string ItemName, int CountOwned, int? CountNeeded)>();
+
+        var hideoutData = ProgressionTracker.ProfileHideoutProgressData[profileId];
+
+        foreach (var (_, items) in hideoutData.ItemsNeededByArea)
+        {
+            foreach (var item in items)
+            {
+                if (!result.TryGetValue(item.TemplateId, out var existing))
+                {
+                    result[item.TemplateId] =
+                    (
+                        item.ItemName,
+                        item.CountOwned,
+                        item.CountNeeded
+                    );
+                }
+                else
+                {
+                    result[item.TemplateId] =
+                    (
+                        existing.ItemName,
+                        existing.CountOwned + item.CountOwned,
+                        existing.CountNeeded + item.CountNeeded
+                    );
+                }
+            }
+        }
+
+        return result;
     }
     
     private string SplitPascalCase(string text)

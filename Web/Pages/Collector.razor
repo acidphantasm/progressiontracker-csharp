@@ -4,8 +4,16 @@
 @using _progressionTracker.Web.Shared
 @using SPTarkov.Server.Core.Utils
 @using _progressionTracker
+@using _progressionTracker.Models
+@using SPTarkov.Server.Core.Helpers
+@using SPTarkov.Server.Core.Models.Eft.Common.Tables
+@using SPTarkov.Server.Core.Services
+@using Color = MudBlazor.Color
 
 @inject ProgressionTracker ProgressionTracker;
+@inject DatabaseService DatabaseService;
+@inject LocaleService LocaleService;
+@inject ProfileHelper ProfileHelper;
 
 <MudMainContent Style="height: 100vh">
     <MudContainer>
@@ -68,6 +76,44 @@
                             <b>@currentQuestCompleted / @maxQuestValue</b>
                         </MudText>
                     </div>
+                    
+                    @if (currentQuestInProgress > 0)
+                    {
+                        <MudExpansionPanels>
+                            <MudExpansionPanel Text="In-Progress Quests (Click to expand)" Expanded="false">
+                                <MudStack Spacing="2" Class="ml-2 mt-2 mb-2">
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.Center"  Spacing="1">
+                                        <MudIcon Color="Color.Success" Icon="@Icons.Material.Filled.Error"/>
+                                        <MudText Typo="Typo.body2">Some conditions may not be tracked properly, this is based on how SPT handles condition tracking.</MudText>
+                                        <MudIcon Color="Color.Success" Icon="@Icons.Material.Filled.Error"/>
+                                    </MudStack>
+                                    <MudText Typo="Typo.body2" Align="Align.Center">Confirm your own task status in game.</MudText>
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.Center" Spacing="1">
+                                        <MudIcon Color="Color.Success" Icon="@Icons.Material.Filled.Error"/>
+                                        <MudText Typo="Typo.body2">Take it with a grain of salt, it's mainly so you can quickly see what tasks are needed.</MudText>
+                                        <MudIcon Color="Color.Success" Icon="@Icons.Material.Filled.Error"/>
+                                    </MudStack>
+                                    <MudDivider/>
+                                    @foreach (var quest in GetActiveQuestDisplayData(currentProfileId))
+                                    {
+                                        <MudExpansionPanels>
+                                            <MudExpansionPanel Text="@quest.QuestName" Expanded="true">
+                                                <MudStack Class="ml-2 mt-2 mb-2" Spacing="1">
+                                                    @foreach (var cond in quest.Conditions)
+                                                    {
+                                                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                                            <MudIcon Color="@(cond.Completed ? Color.Success : Color.Error)" Icon="@(cond.Completed ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Cancel)"/>
+                                                            <MudText Typo="Typo.body2">@cond.Text</MudText>
+                                                        </MudStack>
+                                                    }
+                                                </MudStack>
+                                            </MudExpansionPanel>
+                                        </MudExpansionPanels>
+                                    }
+                                </MudStack>
+                            </MudExpansionPanel>
+                        </MudExpansionPanels>
+                    }
 
                     <div class="d-flex align-items-center">
                         <MudTooltip Color="Color.Primary" Placement="Placement.Left" Arrow="true">
@@ -96,11 +142,11 @@
                         <MudText Typo="Typo.subtitle1" Color="Color.Secondary" Class="progress-text" style="white-space: nowrap; min-width: 75px"><b>@currentItemsObtained / @maxItemValue</b></MudText>
                     </div>
 
-                    <MudGrid Justify="Justify.FlexStart" GutterSize="2">
+                    <MudGrid Justify="Justify.FlexStart">
                         @foreach (var (itemId, obtained) in ProgressionTracker.ProfileCollectorItemsCollected[currentProfileId])
                         {
                             if (!ProgressionTracker.RequiredCollectorItems.TryGetValue(itemId, out var itemName)) itemName = "??";
-                            <MudItem xs="3">
+                            <MudItem xs="1">
                                 <MudPaper Class="d-flex flex-column align-center justify-center p-1" Elevation="0">
                                     <img src="@GetItemImageUrl(itemId)"
                                          alt="@itemName"
@@ -214,6 +260,19 @@
         }
 
         return completedCount;
+    }
+
+    private List<QuestDisplayInfo> GetActiveQuestDisplayData(string profileId)
+    {
+        var result = new List<QuestDisplayInfo>();
+
+        if (!ProgressionTracker.ProfileCollectorQuestsInProgressStatus.TryGetValue(profileId, out var questsDictionary))
+            return result;
+
+        if (!ProgressionTracker.CollectorInProgressDisplay.TryGetValue(profileId, out var questDisplayInfo))
+            return result;
+
+        return questDisplayInfo;
     }
     
     private double GetCollectorItemMaxCount()
