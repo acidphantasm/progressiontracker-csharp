@@ -52,6 +52,8 @@
         <MudAppBar Dense Elevation="1" Bottom>
             <MudCheckBox @bind-Value="_appDisableAnimations" Label="Disable Animations"/>
             <MudCheckBox @bind-Value="_appAllowUpdateChecks" Label="Enable Update Checks"/>
+            <MudIcon Icon="@Icons.Material.Filled.Update" Class="ml-3"/> <MudText Class="ml-2 mr-2">Update Timer</MudText> <MudSlider @bind-Value="_updateTimer" Min="300" Max="3600" Variant="Variant.Filled" Immediate="true" Style="width: 200px;" Color="Color.Secondary" ValueLabel="true" Step="60" ValueLabelFormat="@("0 seconds")"/>
+            <MudCheckBox @bind-Value="_logUpdatesInConsole" Label="Log Updates To Console"/>
             <MudSpacer/>
             @if (pendingChanges.Count > 0)
             {
@@ -197,6 +199,24 @@
         {
             ModConfig.Config.ConfigAppSettings.AllowUpdateChecks = value;
             Utils.UpdateView(value, ModConfig.OriginalConfig.ConfigAppSettings.AllowUpdateChecks);
+        }
+    }
+    public static int _updateTimer
+    {
+        get => ModConfig.Config.ConfigAppSettings.UpdateTimer;
+        set
+        {
+            ModConfig.Config.ConfigAppSettings.UpdateTimer = value;
+            Utils.UpdateView(value, ModConfig.OriginalConfig.ConfigAppSettings.UpdateTimer);
+        }
+    }
+    public static bool _logUpdatesInConsole
+    {
+        get => ModConfig.Config.ConfigAppSettings.LogUpdatesInConsole;
+        set
+        {
+            ModConfig.Config.ConfigAppSettings.LogUpdatesInConsole = value;
+            Utils.UpdateView(value, ModConfig.OriginalConfig.ConfigAppSettings.LogUpdatesInConsole);
         }
     }
 

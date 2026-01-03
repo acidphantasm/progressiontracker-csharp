@@ -273,7 +273,7 @@
     
     private string FormatShort(DateTime timestamp)
     {
-        var span = DateTime.UtcNow - timestamp;
+        var span = DateTime.UtcNow - timestamp.ToUniversalTime();
 
         if (span.TotalSeconds < 60)
             return $"{(int)span.TotalSeconds}s";

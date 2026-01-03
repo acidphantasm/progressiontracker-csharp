@@ -4,6 +4,7 @@ using _progressionTracker.Models.Enums;
 using SPTarkov.DI.Annotations;
 using SPTarkov.Server.Core.DI;
 using SPTarkov.Server.Core.Helpers;
+using SPTarkov.Server.Core.Models.Utils;
 using SPTarkov.Server.Core.Utils;
 
 namespace _progressionTracker.Globals;
@@ -14,17 +15,20 @@ public class ModConfig : IOnLoad
     public ModConfig(
         ModHelper modHelper,
         JsonUtil jsonUtil,
-        FileUtil fileUtil)
+        FileUtil fileUtil,
+        ISptLogger<ModConfig> logger)
     {
         _modHelper = modHelper;
         _jsonUtil = jsonUtil;
         _fileUtil = fileUtil;
+        _logger = logger;
         _modPath = _modHelper.GetAbsolutePathToModFolder(Assembly.GetExecutingAssembly());
     }
     
     private static ModHelper? _modHelper;
     private static JsonUtil? _jsonUtil;
     private static FileUtil? _fileUtil;
+    private static ISptLogger<ModConfig>? _logger;
     
     public static ServerConfig Config {get; private set;} = null!;
     public static ServerConfig OriginalConfig {get; private set;} = null!;
@@ -34,6 +38,13 @@ public class ModConfig : IOnLoad
     public async Task OnLoad()
     {
         Config = await _jsonUtil.DeserializeFromFileAsync<ServerConfig>(_modPath + "/config.json") ?? throw new ArgumentNullException();
+        
+        if (Config.ConfigAppSettings.UpdateTimer is < 300 or > 3600)
+        {
+            _logger.Warning($"[ProgressionTracker] Update timer is out of range. Defaulting to 600. Valid values 300 - 3600.");
+            Config.ConfigAppSettings.UpdateTimer = 600;
+        }
+        
         OriginalConfig = DeepClone(Config);
     }
     

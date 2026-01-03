@@ -1,6 +1,8 @@
 ﻿{  
   "configAppSettings": {
     "disableAnimations": false,
-    "allowUpdateChecks": false
+    "allowUpdateChecks": false,
+    "updateTimer": 600,
+    "logUpdatesInConsole": true
   }
 }

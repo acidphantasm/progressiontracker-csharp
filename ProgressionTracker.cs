@@ -1,17 +1,13 @@
 using System.Reflection;
-using System.Text.Json;
+using _progressionTracker.Globals;
 using _progressionTracker.Models;
-using _progressionTracker.Patches;
 using SPTarkov.DI.Annotations;
 using SPTarkov.Server.Core.DI;
 using SPTarkov.Server.Core.Helpers;
-using SPTarkov.Server.Core.Models.Common;
-using SPTarkov.Server.Core.Models.Eft.Hideout;
 using SPTarkov.Server.Core.Models.Enums;
 using SPTarkov.Server.Core.Models.Enums.Hideout;
 using SPTarkov.Server.Core.Models.Spt.Mod;
 using SPTarkov.Server.Core.Models.Utils;
-using SPTarkov.Server.Core.Servers;
 using SPTarkov.Server.Core.Services;
 using SPTarkov.Server.Core.Utils.Json;
 using SPTarkov.Server.Web;
@@ -24,7 +20,7 @@ public record ModMetadata : AbstractModMetadata, IModWebMetadata
     public override string Name { get; init; } = "Progression Tracker";
     public override string Author { get; init; } = "acidphantasm";
     public override List<string>? Contributors { get; init; }
-    public override SemanticVersioning.Version Version { get; init; } = new("1.0.2");
+    public override SemanticVersioning.Version Version { get; init; } = new("1.0.3");
     public override SemanticVersioning.Range SptVersion { get; init; } = new("~4.0.0");
     public override List<string>? Incompatibilities { get; init; }
     public override Dictionary<string, SemanticVersioning.Range>? ModDependencies { get; init; }
@@ -66,9 +62,9 @@ public class ProgressionTracker(
     
     public readonly Dictionary<string, Dictionary<string, int>> ProfileTraderLoyaltyStatus = new();
 
-    private readonly int _secondsRequiredForUpdate = 600; 
-    public DateTime LastUpdateCheck = DateTime.UtcNow;
-    public DateTime LastUpdateCheckCollectorQuests = DateTime.UtcNow;
+    private const long FirstServerStartupValue = 1767419877;
+    public DateTime LastUpdateCheck = DateTime.Now;
+    public DateTime LastUpdateCheckCollectorQuests = DateTime.Now;
     
     public Task OnLoad()
     {
@@ -82,12 +78,18 @@ public class ProgressionTracker(
     
     public Task<bool> OnUpdate(long timeSinceLastRun)
     {
-        if (timeSinceLastRun < _secondsRequiredForUpdate) return Task.FromResult(false);
-        
-        LastUpdateCheck = DateTime.UtcNow;
+        if (timeSinceLastRun < ModConfig.Config.ConfigAppSettings.UpdateTimer) return Task.FromResult(false);
+        LastUpdateCheck = DateTime.Now;
         GetProfileStatusInformation();
         OnProgressionUpdated?.Invoke();
-        logger.Success($"[ProgressionTracker] Updating Profile Data - Time since last run : {timeSinceLastRun}");
+
+        if (ModConfig.Config.ConfigAppSettings.LogUpdatesInConsole)
+        {
+            var lastRunText = timeSinceLastRun == FirstServerStartupValue
+                ? "Now"
+                : LastUpdateCheck.ToString("g");
+            logger.Success($"[ProgressionTracker] Updating Profile Data... Last Update Time : {lastRunText}");
+        }
 
         return Task.FromResult(true);
     }
@@ -457,7 +459,7 @@ public class ProgressionTracker(
         ProfileCollectorQuestsInProgressStatus[profileId][questId] = inProgress;
         ProfileCollectorQuestsCompletedStatus[profileId][questId] = completed;
         
-        LastUpdateCheckCollectorQuests = DateTime.UtcNow;
+        LastUpdateCheckCollectorQuests = DateTime.Now;
 
         OnProgressionUpdated?.Invoke();
     }

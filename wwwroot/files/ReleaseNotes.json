@@ -1,8 +1,19 @@
 ﻿[
   {
+    "Version": "1.0.3",
+    "ReleaseDate": "January 3, 2026",
+    "IsLatest": true,
+    "NewFeatures": [
+      "Added configurable update timer & toggle to log updates to console"
+    ],
+    "Changes": [],
+    "BugFixes": [],
+    "KnownIssues": []
+  },
+  {
     "Version": "1.0.2",
     "ReleaseDate": "December 7, 2025",
-    "IsLatest": true,
+    "IsLatest": false,
     "NewFeatures": [
       "[Hideout] Collapsable display of total items required for all hideout upgrades (next level upgrades only)",
       "[Collector] Collapsable display of in progress quests, their conditions, and status"

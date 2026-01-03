@@ -14,4 +14,8 @@ public class ConfigAppSettings
     public bool DisableAnimations { get; set; }
     [JsonPropertyName("allowUpdateChecks")]
     public bool AllowUpdateChecks { get; set; }
+    [JsonPropertyName("updateTimer")]
+    public int UpdateTimer { get; set; }
+    [JsonPropertyName("logUpdatesInConsole")]
+    public bool LogUpdatesInConsole { get; set; }  
 }
